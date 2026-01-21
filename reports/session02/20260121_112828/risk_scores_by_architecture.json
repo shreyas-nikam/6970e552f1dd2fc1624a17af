@@ -10,28 +10,19 @@
     },
     "LLM":{
         "Data Risk":10.0,
-        "Model Risk":10.0,
+        "Model Risk":0.0,
         "Security Risk":4.0,
-        "Operational Risk":1.67,
-        "Transparency \/ Explainability Risk":6.67,
+        "Operational Risk":0.0,
+        "Transparency \/ Explainability Risk":5.0,
         "Dependency \/ Vendor Risk":10.0,
         "Runtime Autonomy Risk":0.0
     },
     "Agent":{
         "Data Risk":10.0,
-        "Model Risk":10.0,
+        "Model Risk":0.0,
         "Security Risk":10.0,
         "Operational Risk":10.0,
         "Transparency \/ Explainability Risk":10.0,
-        "Dependency \/ Vendor Risk":10.0,
-        "Runtime Autonomy Risk":10.0
-    },
-    "Custom ML":{
-        "Data Risk":0.0,
-        "Model Risk":0.0,
-        "Security Risk":8.0,
-        "Operational Risk":8.33,
-        "Transparency \/ Explainability Risk":3.33,
         "Dependency \/ Vendor Risk":10.0,
         "Runtime Autonomy Risk":10.0
     }

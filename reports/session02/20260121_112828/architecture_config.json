@@ -5,7 +5,7 @@
         "uses_tool_function_calling": false,
         "autonomous_execution_loop": false,
         "human_approval_required": "Partial",
-        "fine_tuned_model": false,
+        "fine_tuned_model": true,
         "real_time_execution": true
     },
     "LLM": {
@@ -24,15 +24,6 @@
         "autonomous_execution_loop": true,
         "human_approval_required": "None",
         "fine_tuned_model": true,
-        "real_time_execution": true
-    },
-    "Custom ML": {
-        "uses_external_apis": true,
-        "uses_rag_vector_store": false,
-        "uses_tool_function_calling": true,
-        "autonomous_execution_loop": true,
-        "human_approval_required": "None",
-        "fine_tuned_model": false,
         "real_time_execution": true
     }
 }

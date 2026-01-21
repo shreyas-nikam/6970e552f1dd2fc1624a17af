@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 from datetime import datetime
 import os
 import json
+import shutil
 from source import *
 
 # Set page configuration
@@ -130,6 +131,9 @@ if 'run_id' not in st.session_state:
 if 'export_zip_filepath' not in st.session_state:
     st.session_state['export_zip_filepath'] = None
 
+if 'export_reports_path' not in st.session_state:
+    st.session_state['export_reports_path'] = None
+
 # Perform initial calculation if config is available and dataframes are empty
 if st.session_state['architectures_config'] and st.session_state['normalized_risk_scores_df'].empty:
     recalculate_all_risks_and_controls()
@@ -226,10 +230,24 @@ This section also establishes the core definitions for OmniCorp's AI risk taxono
             f"- {constraint}" for constraint in st.session_state['selected_use_case_data'].get('enterprise_constraints', []))
         st.markdown(enterprise_constraints)
         if st.button("Load This Use Case Configuration", type="primary"):
-            st.session_state['architectures_config'] = st.session_state['selected_use_case_data']['architectural_options_defaults']
+            # Load new configuration
+            new_config = st.session_state['selected_use_case_data']['architectural_options_defaults']
+            st.session_state['architectures_config'] = new_config
+            
+            # Update widget keys to match new configuration values
+            architecture_types = ["ML", "LLM", "Agent"]
+            features = globals().get('ARCHITECTURAL_FEATURES', [])
+            for arch_type in architecture_types:
+                for feature in features:
+                    widget_key = f"{arch_type}_{feature}"
+                    new_value = new_config.get(arch_type, {}).get(feature)
+                    if new_value is not None:
+                        st.session_state[widget_key] = new_value
+            
             recalculate_all_risks_and_controls()
             st.success(
                 f"Loaded configuration for {st.session_state['selected_use_case_name']}!")
+            st.rerun()
     else:
         st.warning(
             "No use case data loaded. Please select and load a use case.")
@@ -243,22 +261,81 @@ With the use case loaded, Dr. Sharma now configures the specific features for ea
 """)
 
     # Show Feature to Risk Mapping
-    with st.expander("📊 View Feature-to-Risk Mapping Reference"):
+    with st.expander("📊 View Feature-to-Risk Mapping Reference", expanded=False):
         st.markdown(
             "**How Architectural Features Contribute to Risk Categories:**")
+        st.info("💡 Each enabled feature adds points to specific risk categories. Higher scores indicate higher risk.")
+
         risk_rules = globals().get('RISK_RULES', {})
+
+        # Create a comprehensive mapping table
+        mapping_data = []
         for feature, risks in risk_rules.items():
-            if isinstance(risks, dict) and feature != "human_approval_required":
-                risk_list = [
-                    f"{risk_cat} (+{score} points)" for risk_cat, score in risks.items()]
-                st.markdown(
-                    f"**{feature.replace('_', ' ').title()}:** -> {', '.join(risk_list)}")
-            elif feature == "human_approval_required":
-                st.markdown(f"**{feature.replace('_', ' ').title()}:**")
+            if feature != "human_approval_required":
+                for risk_cat, score in risks.items():
+                    mapping_data.append({
+                        "Feature": feature.replace('_', ' ').title(),
+                        "Risk Category": risk_cat,
+                        "Risk Points": f"+{score}"
+                    })
+            else:
+                # Handle categorical feature
                 for level, level_risks in risks.items():
-                    risk_list = [
-                        f"{risk_cat} -> (+{score} points)" for risk_cat, score in level_risks.items()]
-                    st.markdown(f"  - {level}: {', '.join(risk_list)}")
+                    for risk_cat, score in level_risks.items():
+                        mapping_data.append({
+                            "Feature": f"{feature.replace('_', ' ').title()} ({level})",
+                            "Risk Category": risk_cat,
+                            "Risk Points": f"+{score}"
+                        })
+
+        if mapping_data:
+            mapping_df = pd.DataFrame(mapping_data)
+
+            # Add color coding based on risk points
+            def highlight_risk(val):
+                if val.startswith('+'):
+                    points = int(val[1:])
+                    if points >= 3:
+                        return 'background-color: #ffcccc'
+                    elif points == 2:
+                        return 'background-color: #ffffcc'
+                    else:
+                        return 'background-color: #ccffcc'
+                return ''
+
+            styled_df = mapping_df.style.applymap(
+                highlight_risk, subset=['Risk Points'])
+            st.dataframe(styled_df, use_container_width=True, height=400)
+
+            # Add filter by feature
+            col1, col2 = st.columns(2)
+            with col1:
+                selected_feature = st.selectbox(
+                    "Filter by Feature:",
+                    ["All Features"] +
+                    sorted(mapping_df["Feature"].unique().tolist()),
+                    key="feature_filter"
+                )
+            with col2:
+                selected_risk = st.selectbox(
+                    "Filter by Risk Category:",
+                    ["All Categories"] +
+                    sorted(mapping_df["Risk Category"].unique().tolist()),
+                    key="risk_filter"
+                )
+
+            # Apply filters
+            filtered_df = mapping_df.copy()
+            if selected_feature != "All Features":
+                filtered_df = filtered_df[filtered_df["Feature"]
+                                          == selected_feature]
+            if selected_risk != "All Categories":
+                filtered_df = filtered_df[filtered_df["Risk Category"]
+                                          == selected_risk]
+
+            if len(filtered_df) < len(mapping_df):
+                st.markdown("**Filtered Results:**")
+                st.dataframe(filtered_df, use_container_width=True)
 
     # Architectural Feature Toggles (3-column layout)
     if st.session_state['architectures_config']:
@@ -374,13 +451,64 @@ After quantifying the risks, Dr. Sharma's next step is to determine what control
     st.markdown(r"The control baseline mapping is: Risk category $\rightarrow$ Minimum required controls. A control gap is identified if a required control is not present in the set of `assumed_controls`.")
 
     # Show Risk to Control Mapping
-    with st.expander("🛡️ View Risk-to-Control Baseline Mapping Reference"):
+    with st.expander("🛡️ View Risk-to-Control Baseline Mapping Reference", expanded=False):
         st.markdown("**Required Controls by Risk Category:**")
+        st.info(
+            "💡 When a risk category score exceeds the threshold, these controls become mandatory.")
+
         control_library = globals().get('CONTROL_BASELINE_LIBRARY', {})
+
+        # Create a comprehensive control mapping table
+        control_mapping_data = []
         for risk_cat, controls in control_library.items():
-            st.markdown(f"**{risk_cat}:**")
-            for control in controls:
-                st.markdown(f"  - {control}")
+            for idx, control in enumerate(controls, 1):
+                control_mapping_data.append({
+                    "Risk Category": risk_cat,
+                    "Control #": idx,
+                    "Required Control": control
+                })
+
+        if control_mapping_data:
+            control_df = pd.DataFrame(control_mapping_data)
+
+            # Display summary statistics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Risk Categories", len(control_library))
+            with col2:
+                st.metric("Total Controls", len(control_mapping_data))
+            with col3:
+                avg_controls = len(control_mapping_data) / len(control_library)
+                st.metric("Avg Controls per Category", f"{avg_controls:.1f}")
+
+            st.markdown("---")
+
+            # Add tabs for different views
+            tab1, tab2 = st.tabs(["📋 Table View", "🎯 By Risk Category"])
+
+            with tab1:
+                # Filter by risk category
+                selected_risk_cat = st.selectbox(
+                    "Filter by Risk Category:",
+                    ["All Categories"] +
+                    sorted(control_df["Risk Category"].unique().tolist()),
+                    key="control_risk_filter"
+                )
+
+                filtered_control_df = control_df.copy()
+                if selected_risk_cat != "All Categories":
+                    filtered_control_df = filtered_control_df[filtered_control_df["Risk Category"]
+                                                              == selected_risk_cat]
+
+                st.dataframe(filtered_control_df,
+                             use_container_width=True, height=400)
+
+            with tab2:
+                # Group by risk category with expandable sections
+                for risk_cat in sorted(control_library.keys()):
+                    with st.expander(f"**{risk_cat}** ({len(control_library[risk_cat])} controls)"):
+                        for idx, control in enumerate(control_library[risk_cat], 1):
+                            st.markdown(f"{idx}. {control}")
 
     if st.session_state['required_controls_by_architecture'] and st.session_state['control_gaps_by_architecture']:
         current_threshold = globals().get('RISK_THRESHOLD', 5)
@@ -470,6 +598,7 @@ The following artifacts will be generated and bundled into a ZIP file:
                     st.session_state['free_text_assumptions']
                 )
                 st.session_state['export_zip_filepath'] = zip_file_path
+                st.session_state['export_reports_path'] = reports_path
 
                 # REPORTS_DIR_BASE is usually in source, but we can display the ID
                 st.success(
@@ -482,14 +611,38 @@ The following artifacts will be generated and bundled into a ZIP file:
                 "Please ensure a use case is loaded and risk calculations are complete before exporting.")
 
     if st.session_state['export_zip_filepath'] and os.path.exists(st.session_state['export_zip_filepath']):
-        with open(st.session_state['export_zip_filepath'], "rb") as fp:
-            st.download_button(
-                label="Download Export Package (.zip)",
-                data=fp.read(),
-                file_name=os.path.basename(
-                    st.session_state['export_zip_filepath']),
-                mime="application/zip",
-            )
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            with open(st.session_state['export_zip_filepath'], "rb") as fp:
+                st.download_button(
+                    label="Download Export Package (.zip)",
+                    data=fp.read(),
+                    file_name=os.path.basename(
+                        st.session_state['export_zip_filepath']),
+                    mime="application/zip",
+                )
+
+        with col2:
+            if st.button("🗑️ Clean Up Files", type="secondary"):
+                try:
+                    # Remove the ZIP file
+                    if st.session_state['export_zip_filepath'] and os.path.exists(st.session_state['export_zip_filepath']):
+                        os.remove(st.session_state['export_zip_filepath'])
+
+                    # Remove the reports directory
+                    if st.session_state['export_reports_path'] and os.path.exists(st.session_state['export_reports_path']):
+                        shutil.rmtree(st.session_state['export_reports_path'])
+
+                    # Clear session state
+                    st.session_state['export_zip_filepath'] = None
+                    st.session_state['export_reports_path'] = None
+                    st.session_state['run_id'] = None
+
+                    st.success("Export files cleaned up successfully!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error cleaning up files: {e}")
 
 
 # License

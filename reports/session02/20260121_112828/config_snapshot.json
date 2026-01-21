@@ -1,5 +1,5 @@
 {
-    "use_case_name": "Clinical / Operations Triage",
+    "use_case_name": "Customer Support Automation",
     "architectural_features_definition": [
         "uses_external_apis",
         "uses_rag_vector_store",
@@ -132,5 +132,5 @@
             "Comprehensive audit logs"
         ]
     },
-    "free_text_assumptions": "This analysis assumes OmniCorp's existing enterprise security controls are effective and up-to-date. The risk threshold for mandatory controls (5/10) reflects a moderate risk appetite for new AI initiatives."
+    "free_text_assumptions": "This analysis assumes OmniCorp's existing enterprise security controls are effective and up-to-date."
 }
