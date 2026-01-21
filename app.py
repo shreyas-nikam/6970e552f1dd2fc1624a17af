@@ -5,6 +5,7 @@ from datetime import datetime
 import os
 import json
 import shutil
+import time
 from source import *
 
 # Set page configuration
@@ -26,13 +27,31 @@ def recalculate_all_risks_and_controls():
     """Recalculates risk scores and controls based on current configuration."""
     # Assumes RISK_TAXONOMY, RISK_RULES, CONTROL_BASELINE_LIBRARY, RISK_THRESHOLD are global from source.py
     if st.session_state['architectures_config'] and 'RISK_TAXONOMY' in globals() and 'RISK_RULES' in globals():
+        # Merge standard risk rules with custom feature rules
+        merged_risk_rules = dict(globals()['RISK_RULES'])
+
+        if 'custom_features' in st.session_state:
+            for feat_name, feat_data in st.session_state['custom_features'].items():
+                merged_risk_rules[feat_name] = feat_data['risk_impacts']
+
+        # Merge standard control library with custom controls
+        merged_control_library = dict(globals()['CONTROL_BASELINE_LIBRARY'])
+
+        if 'custom_controls' in st.session_state:
+            for risk_cat, controls in st.session_state['custom_controls'].items():
+                if risk_cat in merged_control_library:
+                    merged_control_library[risk_cat] = list(
+                        merged_control_library[risk_cat]) + controls
+                else:
+                    merged_control_library[risk_cat] = controls
+
         st.session_state['normalized_risk_scores_df'], st.session_state['raw_risk_scores_df'] = calculate_risk_scores(
-            st.session_state['architectures_config'], globals()['RISK_TAXONOMY'], globals()[
-                'RISK_RULES']
+            st.session_state['architectures_config'], globals(
+            )['RISK_TAXONOMY'], merged_risk_rules
         )
         st.session_state['required_controls_by_architecture'] = identify_required_controls(
-            st.session_state['normalized_risk_scores_df'], globals(
-            )['CONTROL_BASELINE_LIBRARY'], globals()['RISK_THRESHOLD']
+            st.session_state['normalized_risk_scores_df'], merged_control_library, globals()[
+                'RISK_THRESHOLD']
         )
         st.session_state['control_gaps_by_architecture'] = perform_control_gap_analysis(
             st.session_state['required_controls_by_architecture'], st.session_state['assumed_controls_omnicorp']
@@ -196,61 +215,153 @@ This section also establishes the core definitions for OmniCorp's AI risk taxono
 
     st.markdown(f"---")
 
-    if st.session_state['use_cases_list']:
-        try:
-            current_index = st.session_state['use_cases_list'].index(
-                st.session_state['selected_use_case_name'])
-        except ValueError:
-            current_index = 0
+    # Tabs for Load and Add Use Cases
+    uc_tab1, uc_tab2 = st.tabs(["📥 Load Use Case", "➕ Add Custom Use Case"])
 
-        selected_uc_name = st.selectbox(
-            "Choose a Use Case Template:",
-            st.session_state['use_cases_list'],
-            index=current_index,
-            key='main_use_case_selector'
-        )
+    with uc_tab1:
+        if st.session_state['use_cases_list']:
+            try:
+                current_index = st.session_state['use_cases_list'].index(
+                    st.session_state['selected_use_case_name'])
+            except ValueError:
+                current_index = 0
 
-        if selected_uc_name != st.session_state['selected_use_case_name']:
-            st.session_state['selected_use_case_name'] = selected_uc_name
-            load_new_use_case()
-            st.rerun()
-    else:
-        st.warning("No use cases available.")
-    st.subheader(
-        f"Selected Use Case: {st.session_state['selected_use_case_name']}")
-    if st.session_state['selected_use_case_data']:
-        st.markdown(
-            f"**Description:** {st.session_state['selected_use_case_data'].get('description', 'N/A')}")
-        st.markdown(f"**Baseline Assumptions:**")
-        baseline_assumptions = "\n".join(
-            f"- {assumption}" for assumption in st.session_state['selected_use_case_data'].get('baseline_assumptions', []))
-        st.markdown(baseline_assumptions)
-        st.markdown(f"**Enterprise Constraints:**")
-        enterprise_constraints = "\n".join(
-            f"- {constraint}" for constraint in st.session_state['selected_use_case_data'].get('enterprise_constraints', []))
-        st.markdown(enterprise_constraints)
-        if st.button("Load This Use Case Configuration", type="primary"):
-            # Load new configuration
-            new_config = st.session_state['selected_use_case_data']['architectural_options_defaults']
-            st.session_state['architectures_config'] = new_config
-            
-            # Update widget keys to match new configuration values
-            architecture_types = ["ML", "LLM", "Agent"]
-            features = globals().get('ARCHITECTURAL_FEATURES', [])
-            for arch_type in architecture_types:
-                for feature in features:
-                    widget_key = f"{arch_type}_{feature}"
-                    new_value = new_config.get(arch_type, {}).get(feature)
-                    if new_value is not None:
-                        st.session_state[widget_key] = new_value
-            
-            recalculate_all_risks_and_controls()
-            st.success(
-                f"Loaded configuration for {st.session_state['selected_use_case_name']}!")
-            st.rerun()
-    else:
-        st.warning(
-            "No use case data loaded. Please select and load a use case.")
+            selected_uc_name = st.selectbox(
+                "Choose a Use Case Template:",
+                st.session_state['use_cases_list'],
+                index=current_index,
+                key='main_use_case_selector'
+            )
+
+            if selected_uc_name != st.session_state['selected_use_case_name']:
+                st.session_state['selected_use_case_name'] = selected_uc_name
+                load_new_use_case()
+                st.rerun()
+        else:
+            st.warning("No use cases available.")
+
+        st.subheader(
+            f"Selected Use Case: {st.session_state['selected_use_case_name']}")
+        if st.session_state['selected_use_case_data']:
+            st.markdown(
+                f"**Description:** {st.session_state['selected_use_case_data'].get('description', 'N/A')}")
+            st.markdown(f"**Baseline Assumptions:**")
+            baseline_assumptions = "\n".join(
+                f"- {assumption}" for assumption in st.session_state['selected_use_case_data'].get('baseline_assumptions', []))
+            st.markdown(baseline_assumptions)
+            st.markdown(f"**Enterprise Constraints:**")
+            enterprise_constraints = "\n".join(
+                f"- {constraint}" for constraint in st.session_state['selected_use_case_data'].get('enterprise_constraints', []))
+            st.markdown(enterprise_constraints)
+            if st.button("Load This Use Case Configuration", type="primary"):
+                # Load new configuration
+                new_config = st.session_state['selected_use_case_data']['architectural_options_defaults']
+                st.session_state['architectures_config'] = new_config
+
+                # Update widget keys to match new configuration values
+                architecture_types = ["ML", "LLM", "Agent"]
+                features = globals().get('ARCHITECTURAL_FEATURES', [])
+                for arch_type in architecture_types:
+                    for feature in features:
+                        widget_key = f"{arch_type}_{feature}"
+                        new_value = new_config.get(arch_type, {}).get(feature)
+                        if new_value is not None:
+                            st.session_state[widget_key] = new_value
+
+                recalculate_all_risks_and_controls()
+                st.success(
+                    f"Loaded configuration for {st.session_state['selected_use_case_name']}!")
+                st.rerun()
+        else:
+            st.warning(
+                "No use case data loaded. Please select and load a use case.")
+
+    with uc_tab2:
+        st.markdown("### Create a New Use Case")
+        st.info(
+            "Define your custom use case below. Once created, it will appear in the use case selector.")
+
+        with st.form("add_use_case_form"):
+            new_uc_name = st.text_input(
+                "Use Case Name*", placeholder="e.g., Credit Risk Assessment")
+            new_uc_description = st.text_area(
+                "Description*", placeholder="Brief description of the use case...", height=100)
+
+            st.markdown("**Baseline Assumptions** (one per line):")
+            new_uc_assumptions = st.text_area("Baseline Assumptions",
+                                              placeholder="e.g.,\nHigh availability required\nLow latency critical\nIntegration with existing systems",
+                                              height=100)
+
+            st.markdown("**Enterprise Constraints** (one per line):")
+            new_uc_constraints = st.text_area("Enterprise Constraints",
+                                              placeholder="e.g.,\nRegulatory compliance required\nData privacy must be protected\nBudget constraints apply",
+                                              height=100)
+
+            submitted = st.form_submit_button(
+                "Create Use Case", type="primary")
+
+            if submitted:
+                if not new_uc_name or not new_uc_description:
+                    st.error(
+                        "Please provide both name and description for the use case.")
+                else:
+                    # Parse assumptions and constraints
+                    assumptions_list = [
+                        line.strip() for line in new_uc_assumptions.split('\n') if line.strip()]
+                    constraints_list = [
+                        line.strip() for line in new_uc_constraints.split('\n') if line.strip()]
+
+                    # Create default architecture configuration with all features disabled/None
+                    features = globals().get('ARCHITECTURAL_FEATURES', [])
+                    new_arch_config = {"ML": {}, "LLM": {}, "Agent": {}}
+
+                    for arch_type in ["ML", "LLM", "Agent"]:
+                        for feature in features:
+                            if feature == "human_approval_required":
+                                new_arch_config[arch_type][feature] = "None"
+                            else:
+                                new_arch_config[arch_type][feature] = False
+
+                    # Create new use case object
+                    new_use_case = {
+                        "name": new_uc_name,
+                        "description": new_uc_description,
+                        "baseline_assumptions": assumptions_list if assumptions_list else ["No specific assumptions provided"],
+                        "enterprise_constraints": constraints_list if constraints_list else ["No specific constraints provided"],
+                        "architectural_options_defaults": new_arch_config
+                    }
+
+                    # Load existing use cases from file
+                    try:
+                        with open(USE_CASE_FILE, 'r') as f:
+                            all_use_cases = json.load(f)
+
+                        # Check if use case name already exists
+                        if any(uc['name'] == new_uc_name for uc in all_use_cases):
+                            st.error(
+                                f"A use case named '{new_uc_name}' already exists. Please use a different name.")
+                        else:
+                            # Add new use case
+                            all_use_cases.append(new_use_case)
+
+                            # Save back to file
+                            with open(USE_CASE_FILE, 'w') as f:
+                                json.dump(all_use_cases, f, indent=2)
+
+                            # Update session state
+                            st.session_state['use_cases_list'] = [
+                                uc['name'] for uc in all_use_cases]
+                            st.session_state['selected_use_case_name'] = new_uc_name
+                            st.session_state['selected_use_case_data'] = new_use_case
+                            st.session_state['architectures_config'] = new_arch_config
+
+                            recalculate_all_risks_and_controls()
+                            st.toast(
+                                f"✅ Use case '{new_uc_name}' created successfully!", icon="✅")
+                            time.sleep(1)
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Error saving use case: {e}")
 
     st.markdown(f"---")
 
@@ -398,9 +509,198 @@ With the use case loaded, Dr. Sharma now configures the specific features for ea
                         if new_value != current_value:
                             update_config_and_recalculate(
                                 arch_type, feature, new_value)
+
+                # Add custom features to the column view
+                if 'custom_features' in st.session_state and st.session_state['custom_features']:
+                    st.markdown("---")
+                    st.markdown("**Custom Features:**")
+                    for feat_name, feat_data in st.session_state['custom_features'].items():
+                        current_value = current_config.get(feat_name, False)
+                        new_value = st.checkbox(
+                            feat_data['display_name'],
+                            value=current_value,
+                            key=f"{arch_type}_custom_{feat_name}",
+                        )
+                        if new_value != current_value:
+                            update_config_and_recalculate(
+                                arch_type, feat_name, new_value)
     else:
         st.warning(
             "Architectural configurations are not loaded. Please load a use case first.")
+
+    st.markdown("---")
+    st.markdown("## Add Custom Features")
+
+    with st.expander("➕ Add Custom Feature-to-Risk Mapping", expanded=False):
+        st.info(
+            "Define custom architectural features and their impact on risk categories.")
+
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            custom_feature_name = st.text_input("Feature Name*",
+                                                placeholder="e.g., uses_blockchain_integration",
+                                                key="custom_feat_name")
+
+        with col2:
+            custom_feature_display = st.text_input("Display Name",
+                                                   placeholder="e.g., Blockchain Integration",
+                                                   help="How the feature appears in UI",
+                                                   key="custom_feat_display")
+
+        st.markdown("**Risk Impact Configuration:**")
+        st.markdown(
+            "Select which risk categories this feature affects and assign scores.")
+
+        risk_taxonomy = globals().get('RISK_TAXONOMY', [])
+
+        # Store selected risks and scores outside form
+        if 'custom_feature_risks' not in st.session_state:
+            st.session_state['custom_feature_risks'] = {}
+
+        risk_cols = st.columns(2)
+        selected_risks = {}
+
+        for idx, risk_cat in enumerate(risk_taxonomy):
+            with risk_cols[idx % 2]:
+                enabled = st.checkbox(risk_cat, key=f"custom_risk_cb_{idx}")
+                if enabled:
+                    score = st.number_input(
+                        f"Score for {risk_cat}",
+                        min_value=1,
+                        max_value=5,
+                        value=2,
+                        key=f"custom_score_input_{idx}",
+                        help="Risk points contributed (1-5)"
+                    )
+                    selected_risks[risk_cat] = score
+
+        st.markdown("**Architecture Enablement:**")
+        arch_col1, arch_col2, arch_col3 = st.columns(3)
+
+        with arch_col1:
+            ml_enabled = st.checkbox(
+                "Enable for ML", value=False, key="custom_ml_cb")
+        with arch_col2:
+            llm_enabled = st.checkbox(
+                "Enable for LLM", value=False, key="custom_llm_cb")
+        with arch_col3:
+            agent_enabled = st.checkbox(
+                "Enable for Agent", value=False, key="custom_agent_cb")
+
+        if st.button("Add Custom Feature", type="primary", key="add_custom_feat_btn"):
+            if not custom_feature_name:
+                st.error("Please provide a feature name.")
+            elif not selected_risks:
+                st.error(
+                    "Please select at least one risk category and assign a score.")
+            else:
+                # Add to session state custom features
+                if 'custom_features' not in st.session_state:
+                    st.session_state['custom_features'] = {}
+
+                st.session_state['custom_features'][custom_feature_name] = {
+                    "display_name": custom_feature_display or custom_feature_name.replace('_', ' ').title(),
+                    "risk_impacts": selected_risks
+                }
+
+                # Initialize feature in architectures as False
+                for arch_type in ["ML", "LLM", "Agent"]:
+                    if arch_type in st.session_state['architectures_config']:
+                        st.session_state['architectures_config'][arch_type][custom_feature_name] = False
+
+                # Update architecture configurations based on checkboxes
+                if ml_enabled and 'ML' in st.session_state['architectures_config']:
+                    st.session_state['architectures_config']['ML'][custom_feature_name] = True
+                if llm_enabled and 'LLM' in st.session_state['architectures_config']:
+                    st.session_state['architectures_config']['LLM'][custom_feature_name] = True
+                if agent_enabled and 'Agent' in st.session_state['architectures_config']:
+                    st.session_state['architectures_config']['Agent'][custom_feature_name] = True
+
+                recalculate_all_risks_and_controls()
+                st.toast(
+                    f"✅ Custom feature '{custom_feature_name}' added successfully!", icon="✅")
+                time.sleep(1)
+                st.rerun()
+
+        # Display existing custom features
+        if 'custom_features' in st.session_state and st.session_state['custom_features']:
+            st.markdown("### Existing Custom Features")
+
+            custom_features_data = []
+            for feat_name, feat_data in st.session_state['custom_features'].items():
+                risk_list = ", ".join(
+                    [f"{k} (+{v})" for k, v in feat_data['risk_impacts'].items()])
+
+                ml_status = "✅" if st.session_state['architectures_config'].get(
+                    'ML', {}).get(feat_name, False) else "❌"
+                llm_status = "✅" if st.session_state['architectures_config'].get(
+                    'LLM', {}).get(feat_name, False) else "❌"
+                agent_status = "✅" if st.session_state['architectures_config'].get(
+                    'Agent', {}).get(feat_name, False) else "❌"
+
+                custom_features_data.append({
+                    "Feature": feat_data['display_name'],
+                    "Risk Impacts": risk_list,
+                    "ML": ml_status,
+                    "LLM": llm_status,
+                    "Agent": agent_status
+                })
+
+            if custom_features_data:
+                custom_df = pd.DataFrame(custom_features_data)
+                st.dataframe(custom_df, use_container_width=True)
+
+    st.markdown("---")
+    st.markdown("## Add Custom Controls")
+
+    with st.expander("🛡️ Add Custom Control Baseline", expanded=False):
+        st.info(
+            "Add custom controls to risk categories. These will be included in the control baseline library.")
+
+        # Initialize custom controls in session state
+        if 'custom_controls' not in st.session_state:
+            st.session_state['custom_controls'] = {}
+
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            new_control_text = st.text_area("Control Description*",
+                                            placeholder="e.g., Implement multi-factor authentication for all system access",
+                                            height=100,
+                                            key="new_control_input")
+
+        with col2:
+            risk_taxonomy = globals().get('RISK_TAXONOMY', [])
+            selected_risk_category = st.selectbox("Risk Category*",
+                                                  risk_taxonomy,
+                                                  key="new_control_category")
+
+        if st.button("Add Control", type="primary", key="add_control_btn"):
+            if not new_control_text:
+                st.error("Please provide a control description.")
+            else:
+                # Add control to custom controls
+                if selected_risk_category not in st.session_state['custom_controls']:
+                    st.session_state['custom_controls'][selected_risk_category] = [
+                    ]
+
+                st.session_state['custom_controls'][selected_risk_category].append(
+                    new_control_text)
+
+                st.toast(
+                    f"✅ Control added to {selected_risk_category}!", icon="🛡️")
+                time.sleep(1)
+                st.rerun()
+
+        # Display existing custom controls
+        if st.session_state['custom_controls']:
+            st.markdown("### Custom Controls Added")
+
+            for risk_cat, controls in st.session_state['custom_controls'].items():
+                with st.expander(f"**{risk_cat}** ({len(controls)} custom control(s))"):
+                    for idx, control in enumerate(controls, 1):
+                        st.markdown(f"{idx}. {control}")
 
     st.markdown("---")
     st.markdown("## Additional Assumptions")
@@ -510,10 +810,20 @@ After quantifying the risks, Dr. Sharma's next step is to determine what control
                         for idx, control in enumerate(control_library[risk_cat], 1):
                             st.markdown(f"{idx}. {control}")
 
-    if st.session_state['required_controls_by_architecture'] and st.session_state['control_gaps_by_architecture']:
+    if st.session_state['required_controls_by_architecture']:
         current_threshold = globals().get('RISK_THRESHOLD', 5)
         st.subheader(
-            f"Comprehensive Control Gap Checklist (Risk Threshold >= {current_threshold})")
+            f"Interactive Control Gap Checklist (Risk Threshold >= {current_threshold})")
+
+        st.info("✅ Check the controls that are already implemented. Unchecked controls represent gaps that need to be addressed.")
+
+        # Initialize implemented controls in session state if not exists
+        if 'implemented_controls' not in st.session_state:
+            st.session_state['implemented_controls'] = {
+                "ML": list(st.session_state.get('assumed_controls_omnicorp', {}).get('ML', [])),
+                "LLM": list(st.session_state.get('assumed_controls_omnicorp', {}).get('LLM', [])),
+                "Agent": list(st.session_state.get('assumed_controls_omnicorp', {}).get('Agent', []))
+            }
 
         # Display architectures side-by-side in three columns
         cols = st.columns(3)
@@ -522,21 +832,67 @@ After quantifying the risks, Dr. Sharma's next step is to determine what control
         for idx, arch_type in enumerate(architecture_types):
             with cols[idx]:
                 st.markdown(f"### {arch_type} Architecture")
-                if arch_type not in st.session_state['required_controls_by_architecture'] or \
-                   not st.session_state['required_controls_by_architecture'][arch_type]:
+
+                required_controls = st.session_state['required_controls_by_architecture'].get(
+                    arch_type, [])
+
+                if not required_controls:
                     st.markdown(
                         "No specific controls required based on current risk profile and threshold.")
                     continue
 
-                st.markdown("**Required Controls:**")
-                for control in st.session_state['required_controls_by_architecture'][arch_type]:
-                    status = "✅"
-                    if control in st.session_state['control_gaps_by_architecture'].get(arch_type, []):
-                        status = "❌"
-                    st.markdown(f"{status} {control}")
+                implemented = st.session_state['implemented_controls'].get(
+                    arch_type, [])
+
+                st.markdown(f"**Required Controls: {len(required_controls)}**")
+
+                # Show control checkboxes
+                updated_implemented = []
+                for control in required_controls:
+                    is_implemented = st.checkbox(
+                        control,
+                        value=(control in implemented),
+                        key=f"control_{arch_type}_{hash(control)}"
+                    )
+                    if is_implemented:
+                        updated_implemented.append(control)
+
+                # Update session state
+                st.session_state['implemented_controls'][arch_type] = updated_implemented
+
+                # Calculate and display gaps
+                gaps = [c for c in required_controls if c not in updated_implemented]
+
+                st.markdown("---")
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.metric("✅ Implemented", len(updated_implemented))
+                with col_b:
+                    st.metric("❌ Gaps", len(gaps))
+
+                if gaps:
+                    with st.expander(f"View {len(gaps)} Gap(s)"):
+                        for gap in gaps:
+                            st.markdown(f"⚠️ {gap}")
+
+        # Recalculate gaps button
+        if st.button("Update Control Gap Analysis", type="secondary"):
+            # Recalculate gaps based on checkbox selections
+            updated_gaps = {}
+            for arch_type in architecture_types:
+                required = st.session_state['required_controls_by_architecture'].get(
+                    arch_type, [])
+                implemented = st.session_state['implemented_controls'].get(
+                    arch_type, [])
+                updated_gaps[arch_type] = [
+                    c for c in required if c not in implemented]
+
+            st.session_state['control_gaps_by_architecture'] = updated_gaps
+            st.success("✅ Control gap analysis updated!")
+            st.rerun()
     else:
         st.warning(
-            "Control requirements or gaps not available. Please ensure risk calculations are complete.")
+            "Control requirements not available. Please ensure risk calculations are complete.")
 
     st.markdown(f"---")
 
