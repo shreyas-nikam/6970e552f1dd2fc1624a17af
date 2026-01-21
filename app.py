@@ -967,38 +967,30 @@ The following artifacts will be generated and bundled into a ZIP file:
                 "Please ensure a use case is loaded and risk calculations are complete before exporting.")
 
     if st.session_state['export_zip_filepath'] and os.path.exists(st.session_state['export_zip_filepath']):
-        col1, col2 = st.columns([3, 1])
+        with open(st.session_state['export_zip_filepath'], "rb") as fp:
+            file_data = fp.read()
+            st.download_button(
+                label="📥 Download Export Package (.zip)",
+                data=file_data,
+                file_name=os.path.basename(
+                    st.session_state['export_zip_filepath']),
+                mime="application/zip",
+            )
 
-        with col1:
-            with open(st.session_state['export_zip_filepath'], "rb") as fp:
-                st.download_button(
-                    label="Download Export Package (.zip)",
-                    data=fp.read(),
-                    file_name=os.path.basename(
-                        st.session_state['export_zip_filepath']),
-                    mime="application/zip",
-                )
+        # Clean up files after download button is displayed (file is already in memory)
+        try:
+            if st.session_state['export_zip_filepath'] and os.path.exists(st.session_state['export_zip_filepath']):
+                os.remove(st.session_state['export_zip_filepath'])
 
-        with col2:
-            if st.button("🗑️ Clean Up Files", type="secondary"):
-                try:
-                    # Remove the ZIP file
-                    if st.session_state['export_zip_filepath'] and os.path.exists(st.session_state['export_zip_filepath']):
-                        os.remove(st.session_state['export_zip_filepath'])
+            if st.session_state['export_reports_path'] and os.path.exists(st.session_state['export_reports_path']):
+                shutil.rmtree(st.session_state['export_reports_path'])
 
-                    # Remove the reports directory
-                    if st.session_state['export_reports_path'] and os.path.exists(st.session_state['export_reports_path']):
-                        shutil.rmtree(st.session_state['export_reports_path'])
-
-                    # Clear session state
-                    st.session_state['export_zip_filepath'] = None
-                    st.session_state['export_reports_path'] = None
-                    st.session_state['run_id'] = None
-
-                    st.success("Export files cleaned up successfully!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error cleaning up files: {e}")
+            # Clear session state
+            st.session_state['export_zip_filepath'] = None
+            st.session_state['export_reports_path'] = None
+            st.session_state['run_id'] = None
+        except Exception as e:
+            st.warning(f"Note: Could not clean up temporary files: {e}")
 
 
 # License

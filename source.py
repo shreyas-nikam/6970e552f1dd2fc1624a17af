@@ -463,24 +463,24 @@ def plot_risk_radar_chart(df_normalized_scores, risk_taxonomy):
     """
     fig = go.Figure()
 
-    categories = risk_taxonomy
-    num_categories = len(categories)
-
+    # Use the actual columns from the dataframe to ensure alignment
+    categories = [col for col in df_normalized_scores.columns if col in risk_taxonomy]
+    
     for arch_type in df_normalized_scores.index:
-        values = df_normalized_scores.loc[arch_type].tolist()
-        # Ensure the radar chart closes the loop by appending the first value again
-        values = values + values[:1]
-
-        # Create a list of angular positions for each category
-        angles = [n / float(num_categories) * 2 *
-                  np.pi for n in range(num_categories)]
-        angles = angles + angles[:1]  # Close the loop
+        # Get values only for the categories that exist in taxonomy
+        values = [df_normalized_scores.loc[arch_type, cat] for cat in categories]
+        
+        # Close the loop by appending the first value
+        values_closed = values + [values[0]]
+        categories_closed = categories + [categories[0]]
 
         fig.add_trace(go.Scatterpolar(
-            r=values,
-            theta=categories + [categories[0]],  # Close the loop for labels
+            r=values_closed,
+            theta=categories_closed,
             fill='toself',
             name=arch_type,
+            mode='lines',
+            line=dict(width=2),
             hovertemplate='<b>%{theta}</b>: %{r:.2f}<extra></extra>'
         ))
 
@@ -492,7 +492,8 @@ def plot_risk_radar_chart(df_normalized_scores, risk_taxonomy):
                 tickvals=[0, 2, 4, 6, 8, 10],
                 showline=True,
                 linecolor='gray',
-                linewidth=1
+                linewidth=1,
+                gridcolor='lightgray'
             ),
             angularaxis=dict(
                 rotation=90,  # Start labels from top
@@ -501,9 +502,17 @@ def plot_risk_radar_chart(df_normalized_scores, risk_taxonomy):
             )
         ),
         showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.2,
+            xanchor="center",
+            x=0.5
+        ),
         title="Architectural Risk Profile Comparison (Normalized Scores 0-10)",
         height=600,
-        width=800
+        width=800,
+        margin=dict(t=100, b=100, l=80, r=80)
     )
     return fig
 
