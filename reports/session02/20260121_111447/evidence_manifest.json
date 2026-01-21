@@ -1,0 +1,31 @@
+{
+    "run_id": "20260121_111447",
+    "timestamp": "2026-01-21T11:14:47.617238",
+    "artifacts": [
+        {
+            "filename": "architecture_config.json",
+            "filepath": "reports/session02/20260121_111447/architecture_config.json",
+            "sha256_hash": "7bc6230e43a6c67dc3c8f15cf423cc364c2f0498e439a7da807cc07eb9b22a41"
+        },
+        {
+            "filename": "risk_scores_by_architecture.json",
+            "filepath": "reports/session02/20260121_111447/risk_scores_by_architecture.json",
+            "sha256_hash": "0d9ed1b39d1bce558dd30f5c419faeb4f2b1d2e4ec80f4ec8ecc69b5950fa539"
+        },
+        {
+            "filename": "control_gaps_checklist.json",
+            "filepath": "reports/session02/20260121_111447/control_gaps_checklist.json",
+            "sha256_hash": "9abae078ec892bea0501286079592c412a069526505a1569c1c314223af06f56"
+        },
+        {
+            "filename": "session02_executive_summary.md",
+            "filepath": "reports/session02/20260121_111447/session02_executive_summary.md",
+            "sha256_hash": "48fd6312144de1daff9bff484356f10b135ca43116c9650219641482812ce79d"
+        },
+        {
+            "filename": "config_snapshot.json",
+            "filepath": "reports/session02/20260121_111447/config_snapshot.json",
+            "sha256_hash": "d73067d2eea714c17c318c074907a9f124688e8e4d0c778740689b73a63d7234"
+        }
+    ]
+}
