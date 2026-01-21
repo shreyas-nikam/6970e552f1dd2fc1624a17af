@@ -464,12 +464,14 @@ def plot_risk_radar_chart(df_normalized_scores, risk_taxonomy):
     fig = go.Figure()
 
     # Use the actual columns from the dataframe to ensure alignment
-    categories = [col for col in df_normalized_scores.columns if col in risk_taxonomy]
-    
+    categories = [
+        col for col in df_normalized_scores.columns if col in risk_taxonomy]
+
     for arch_type in df_normalized_scores.index:
         # Get values only for the categories that exist in taxonomy
-        values = [df_normalized_scores.loc[arch_type, cat] for cat in categories]
-        
+        values = [df_normalized_scores.loc[arch_type, cat]
+                  for cat in categories]
+
         # Close the loop by appending the first value
         values_closed = values + [values[0]]
         categories_closed = categories + [categories[0]]

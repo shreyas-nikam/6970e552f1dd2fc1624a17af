@@ -870,11 +870,6 @@ After quantifying the risks, Dr. Sharma's next step is to determine what control
                 with col_b:
                     st.metric("❌ Gaps", len(gaps))
 
-                if gaps:
-                    with st.expander(f"View {len(gaps)} Gap(s)"):
-                        for gap in gaps:
-                            st.markdown(f"⚠️ {gap}")
-
         # Recalculate gaps button
         if st.button("Update Control Gap Analysis", type="secondary"):
             # Recalculate gaps based on checkbox selections
