@@ -130,44 +130,4 @@
         "real_time_execution": true
       }
     }
-  },
-  {
-    "name": " gs fdaf ",
-    "description": "dsa fa sdfsa",
-    "baseline_assumptions": [
-      "sd fsdaf ds fad"
-    ],
-    "enterprise_constraints": [
-      "safs af sad saf"
-    ],
-    "architectural_options_defaults": {
-      "ML": {
-        "uses_external_apis": true,
-        "uses_rag_vector_store": true,
-        "uses_tool_function_calling": true,
-        "autonomous_execution_loop": false,
-        "human_approval_required": "None",
-        "fine_tuned_model": false,
-        "real_time_execution": false
-      },
-      "LLM": {
-        "uses_external_apis": false,
-        "uses_rag_vector_store": true,
-        "uses_tool_function_calling": false,
-        "autonomous_execution_loop": true,
-        "human_approval_required": "None",
-        "fine_tuned_model": false,
-        "real_time_execution": false
-      },
-      "Agent": {
-        "uses_external_apis": false,
-        "uses_rag_vector_store": true,
-        "uses_tool_function_calling": false,
-        "autonomous_execution_loop": true,
-        "human_approval_required": "None",
-        "fine_tuned_model": true,
-        "real_time_execution": false
-      }
-    }
-  }
-]
+  }]
